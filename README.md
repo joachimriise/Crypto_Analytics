@@ -2,45 +2,71 @@
 
 Correlation analysis system that learns how macro events affect crypto prices and predicts market response to breaking news.
 
-## Setup & Run
+## 📚 Documentation
 
-### Option 1: Quick Start (Recommended)
+- **[Quick Start Guide](QUICKSTART.md)** - Get up and running in minutes
+- **[Deployment Guide](DEPLOYMENT.md)** - Deploy to your server with auto-updates
+- **[Project Overview](PROJECT_OVERVIEW.md)** - System architecture and features
+- **[API Setup Guide](API_SETUP.md)** - Configure external data sources
+- **[Correlation Analysis](CORRELATION_ANALYSIS.md)** - How the prediction engine works
 
-Just start the app - it will automatically fetch live data:
+## 🚀 Quick Start
+
+### Local Development
 
 ```bash
+# Clone the repository
+git clone https://github.com/joachimriise/Crypto_Analytics.git
+cd Crypto_Analytics
+
+# Install dependencies
+npm install
+
+# Start development server
 npm run dev
 ```
 
-The dashboard will:
-- ✅ Detect empty database
-- ✅ Automatically fetch current crypto prices
-- ✅ Generate recommendations
-- ✅ Collect live prices every minute
-- ✅ Refresh recommendations every 5 minutes
-- ✅ Generate market trend predictions every hour
-- ✅ Show 24-hour trend charts with historical prediction tracking
+The dashboard will automatically fetch live data and start tracking prices!
 
-**That's it!** Open your browser and you'll see live data.
+### Production Deployment
 
-### Option 2: Load Historical Data (Recommended)
-
-Get a FREE LiveCoinWatch API key for 5 years of price history:
-
+**One-line server setup:**
 ```bash
-# 1. Get free API key from https://www.livecoinwatch.com/tools/api
-# 2. Add to .env: VITE_LIVECOINWATCH_API_KEY=your_key
-# 3. Run setup (takes ~2 minutes!)
-npm run setup
+curl -fsSL https://raw.githubusercontent.com/joachimriise/Crypto_Analytics/main/scripts/server-setup.sh | bash
 ```
 
-**Why LiveCoinWatch?**
-- ⚡ Loads 5 years of DAILY data in ~2 minutes (vs 60+ min with CoinGecko)
-- 🎁 10,000 requests/day FREE (vs 30/day)
-- 📊 8+ years of price history
-- 📅 One price per day per currency (efficient storage)
+This will:
+- ✅ Install Node.js, PM2, and all dependencies
+- ✅ Clone and build your app
+- ✅ Set up auto-restart on server reboot
+- ✅ Optionally configure Nginx reverse proxy
+- ✅ Optionally set up webhook for auto-deployment
 
-## What You See
+For detailed deployment options, see **[DEPLOYMENT.md](DEPLOYMENT.md)**
+
+## ✨ Features
+
+### Dashboard Highlights
+- **Real-Time Prices** - Live cryptocurrency prices updated every minute
+- **AI Market Predictions** - Hourly bullish/neutral/bearish forecasts with confidence scores
+- **Buy/Sell Recommendations** - Data-driven trading signals with reasoning
+- **24-Hour Prediction History** - Track prediction accuracy over time
+- **Detailed Charts** - Click any crypto for 24h, 7d, 30d, 90d, 6m, 1y, 5y views
+- **News Feed** - Latest financial news with sentiment analysis
+- **Market Overview** - S&P 500 tracking overall market health
+
+### Auto-Deployment
+- **GitHub Actions** - Automatically deploy when you push to main
+- **Webhook Support** - Server pulls changes on every commit
+- **Zero-Downtime Updates** - PM2 handles graceful restarts
+- **Logging** - Full deployment history and error tracking
+
+### Database Flexibility
+- **Multi-Database Support** - Easy switching between Supabase, PostgreSQL, MySQL, MongoDB
+- **Database Abstraction Layer** - Unified API for all database operations
+- **Migration Tools** - Seamless database transitions
+
+## 🎯 What You See
 
 ### Clean Dashboard With:
 - **Overall Market Trend** - AI-powered hourly predictions (Bullish/Neutral/Bearish) with confidence scores
@@ -62,7 +88,16 @@ npm run setup
 - Clear reasoning explaining why
 - Target price and stop-loss levels
 
-## How It Works
+## 🔧 Technology Stack
+
+- **Frontend**: React + TypeScript + Tailwind CSS
+- **Build Tool**: Vite
+- **Database**: Supabase (PostgreSQL with RLS) - easily switchable
+- **APIs**: CoinGecko (real-time prices, free)
+- **Deployment**: PM2, Nginx, GitHub Actions
+- **Server**: Node.js 20+
+
+## 🎓 How It Works
 
 1. **Real Live Data**: Fetches current prices from CoinGecko API (100% real, no demo data)
 2. **Macro News Collection**: Tracks tariffs, Fed policy, interest rates, inflation, trade wars, geopolitics, oil prices, sanctions
@@ -71,36 +106,13 @@ npm run setup
 5. **Predictive Recommendations**: When similar news breaks, predicts response based on historical correlations
 6. **Live Updates**: Refreshes every 5 minutes, continuously learning from new data
 
-## Top 10 Cryptos Tracked
+## 📊 Top 10 Cryptos Tracked
 
 Bitcoin (BTC) • Ethereum (ETH) • BNB • Solana (SOL) • XRP • Cardano (ADA) • Dogecoin (DOGE) • Polygon (MATIC) • Avalanche (AVAX) • Polkadot (DOT)
 
-## Technology
+## 🌐 Optional: Enhanced Data
 
-- **Frontend**: React + TypeScript + Tailwind CSS
-- **Database**: Supabase (PostgreSQL with RLS)
-- **APIs**: CoinGecko (real-time prices, free)
-- **Analysis**:
-  - Correlation Analyzer - Links news events to price movements
-  - Sentiment Analyzer - Scores news as positive/negative
-  - Pattern Recognition - Learns from 5 years of historical data
-  - Prediction Engine - Forecasts crypto response to breaking news
-
-## Architecture
-
-**Historical Setup** (one-time):
-- `npm run setup` - Runs `scripts/setup.js` to backfill 5 years of data
-- This is completely optional for basic usage
-
-**Live Dashboard**:
-- Auto-detects empty database on first load
-- Fetches current data automatically
-- Refreshes every 5 minutes in background
-- No admin buttons - just clean recommendations
-
-## Optional: Enhanced Data
-
-Get free API keys for best experience:
+Get free API keys for the best experience:
 
 **LiveCoinWatch** (HIGHLY RECOMMENDED):
 - https://www.livecoinwatch.com/tools/api
@@ -118,12 +130,61 @@ Get free API keys for best experience:
 - 25 requests/day FREE
 - Add to .env: `VITE_ALPHA_VANTAGE_API_KEY=your_key`
 
-Without these keys, the system uses:
-- Real crypto prices from CoinGecko ✅ (automatic fallback)
-- Sample news articles
-- Sample S&P 500 data
+## 🔄 Deployment Options
 
-## Important
+### Option 1: GitHub Actions (Recommended)
+Automatically deploys when you push to main branch. See [DEPLOYMENT.md](DEPLOYMENT.md) for setup.
+
+### Option 2: Webhook Listener
+Server listens for GitHub webhooks and pulls changes automatically.
+
+### Option 3: Manual Deployment
+Use the provided scripts for one-time or scheduled deployments.
+
+## 📁 Project Structure
+
+```
+crypto-analytics/
+├── .github/
+│   └── workflows/
+│       └── deploy.yml          # GitHub Actions deployment
+├── scripts/
+│   ├── deploy.sh              # Server deployment script
+│   ├── server-setup.sh        # One-line server setup
+│   └── setup.js               # Historical data loader
+├── src/
+│   ├── components/            # React components
+│   ├── lib/
+│   │   ├── api/              # External API integrations
+│   │   ├── services/         # Business logic
+│   │   ├── db.ts             # Database abstraction layer
+│   │   └── supabase.ts       # Supabase client
+│   └── App.tsx
+├── DEPLOYMENT.md              # Comprehensive deployment guide
+├── ecosystem.config.js        # PM2 configuration
+├── .env.example              # Environment template
+└── README.md                 # You are here
+```
+
+## ⚙️ Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+```env
+# Database Provider (supabase, postgres, mysql, mongodb)
+VITE_DB_PROVIDER=supabase
+
+# Supabase Configuration
+VITE_SUPABASE_URL=your_supabase_url
+VITE_SUPABASE_ANON_KEY=your_anon_key
+
+# Optional API Keys
+VITE_LIVECOINWATCH_API_KEY=your_key
+VITE_NEWSAPI_API_KEY=your_key
+VITE_ALPHA_VANTAGE_API_KEY=your_key
+```
+
+## 🚨 Important Notes
 
 ⚠️ **Not Financial Advice**
 - This is an analytical tool for educational purposes
@@ -132,54 +193,34 @@ Without these keys, the system uses:
 
 ✅ **100% Real Data**
 - All cryptocurrency prices are live from CoinGecko/LiveCoinWatch APIs
-- **Live data**: One price every minute for past 24 hours (accessible in detail modals)
-- **Historical data**: One price per day since January 1, 2020 (~18,250 records)
-- **Multi-timeframe charts**: 24h, 7d, 30d, 90d, 6m, 1y, 5y views available
-- Auto-cleanup: Live data older than 24 hours is removed to keep database efficient
+- **Live data**: One price every minute for past 24 hours
+- **Historical data**: One price per day since January 1, 2020
+- **Multi-timeframe charts**: 24h, 7d, 30d, 90d, 6m, 1y, 5y views
+- Auto-cleanup: Live data older than 24 hours is removed
 - No simulated, demo, or fake data ever
 
-## FAQ
+## 🔐 Security
 
-**Q: I don't see any data?**
-A: Wait 10-15 seconds on first load while it fetches live prices automatically.
+- Never commit `.env` files
+- Use SSH keys for deployment
+- Enable database connection encryption
+- Keep dependencies updated
+- Use HTTPS/SSL in production
 
-**Q: Do I need to run setup?**
-A: No! The dashboard works without it. Setup is only for 5 years of historical data.
+## 🤝 Contributing
 
-**Q: How often does it update?**
-A: Every 5 minutes automatically. Click Refresh for immediate update.
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-**Q: Can I add more cryptos?**
-A: Yes, edit `src/lib/constants.ts` and add to `TOP_CRYPTOS` array.
+## 📄 License
 
-## Project Structure
+This project is open source and available under the MIT License.
 
-```
-src/
-├── components/          # React components
-│   ├── Dashboard.tsx   # Main dashboard (auto-fetches data)
-│   ├── CryptoPriceGrid.tsx
-│   ├── RecommendationCard.tsx
-│   └── NewsFeed.tsx
-├── lib/
-│   ├── api/            # CoinGecko, AlphaVantage, NewsAPI
-│   ├── services/
-│   │   ├── data-collector.ts        # Fetches live prices & news
-│   │   ├── correlation-analyzer.ts  # Links events to price changes
-│   │   ├── recommendation-engine.ts # Generates BUY/SELL signals
-│   │   └── sentiment-analyzer.ts    # Scores news sentiment
-│   └── supabase.ts     # Database client
-scripts/
-└── setup.js            # Loads 5 years historical data (2020-2025)
-```
+## 🆘 Support
 
-## Key Innovation: Correlation Analysis
+For issues, questions, or deployment help, see:
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Detailed deployment instructions
+- [GitHub Issues](https://github.com/joachimriise/Crypto_Analytics/issues) - Report bugs or request features
 
-The system builds a correlation database:
-- When tariff news breaks → BTC dropped 8% within 24hrs (confidence: 87%)
-- When Fed cuts rates → ETH rallied 12% within 48hrs (confidence: 92%)
-- When oil prices spike → SOL declined 5% within 12hrs (confidence: 78%)
+---
 
-When similar news appears, it predicts the likely crypto market response based on these learned patterns.
-
-The system is fully automatic - start it and it handles everything.
+**Built with ❤️ for crypto traders and developers**
