@@ -8,6 +8,7 @@ export const TOP_CRYPTOS = [
   { id: 'usd-coin', symbol: 'USDC', name: 'USD Coin' },
   { id: 'dogecoin', symbol: 'DOGE', name: 'Dogecoin' },
   { id: 'tron', symbol: 'TRX', name: 'TRON' },
+  { id: 'cardano', symbol: 'ADA', name: 'Cardano' },
 ] as const;
 
 export const EVENT_CATEGORIES = {
