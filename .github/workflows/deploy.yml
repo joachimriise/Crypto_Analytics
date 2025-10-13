@@ -28,7 +28,7 @@ jobs:
         VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
         VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
     
-    - name: Deploy to Server via SSH (without sudo)
+    - name: Deploy to Server via SSH
       uses: appleboy/ssh-action@v1.0.3
       with:
         host: ${{ secrets.SERVER_HOST }}
@@ -36,26 +36,27 @@ jobs:
         key: ${{ secrets.SERVER_SSH_KEY }}
         port: ${{ secrets.SERVER_PORT }}
         script: |
+          echo "🚀 Starting deployment..."
+          
+          # Navigate to project directory
           cd ${{ secrets.DEPLOY_PATH }}
+          
+          # Pull latest changes
+          echo "📥 Pulling latest code from GitHub..."
           git pull origin main
+          
+          # Install dependencies
+          echo "📦 Installing dependencies..."
           npm ci
+          
+          # Build the application
+          echo "🔨 Building application..."
           npm run build
           
-          # Use pm2 from local installation
-          if command -v pm2 &> /dev/null; then
-            pm2 restart crypto-analytics || pm2 start "serve -s dist -l 3000" --name crypto-analytics
-          elif [ -f ~/.local/bin/pm2 ]; then
-            ~/.local/bin/pm2 restart crypto-analytics || ~/.local/bin/pm2 start "serve -s dist -l 3000" --name crypto-analytics
-          else
-            echo "PM2 not found. Installing locally..."
-            npm install -g pm2 --prefix ~/.local
-            export PATH="$HOME/.local/bin:$PATH"
-            ~/.local/bin/pm2 start "serve -s dist -l 3000" --name crypto-analytics
-          fi
+          # Copy built files to web root
+          echo "📋 Copying files to web root..."
+          rm -rf ~/www/*
+          cp -r dist/* ~/www/
           
-          # Save PM2 process list
-          if command -v pm2 &> /dev/null; then
-            pm2 save
-          elif [ -f ~/.local/bin/pm2 ]; then
-            ~/.local/bin/pm2 save
-          fi
+          echo "✅ Deployment complete!"
+          echo "🌐 Site updated at https://crypto.brandbuilder.no"
