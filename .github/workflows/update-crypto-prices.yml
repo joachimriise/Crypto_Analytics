@@ -1,0 +1,58 @@
+name: Update Crypto Prices
+
+on:
+  schedule:
+    # Run every 5 minutes for 5-minute price updates
+    - cron: '*/5 * * * *'
+    # Run daily at 00:05 UTC for daily price updates
+    - cron: '5 0 * * *'
+  workflow_dispatch: # Allow manual triggering
+
+jobs:
+  update-5min-prices:
+    runs-on: ubuntu-latest
+    # Skip daily job runs for 5-minute updates
+    if: github.event.schedule != '5 0 * * *'
+    
+    steps:
+      - name: Update 5-minute crypto prices
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            '${{ secrets.SUPABASE_URL }}/functions/v1/fetch-5min-prices' \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json")
+          
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n-1)
+          
+          echo "Response: $body"
+          echo "HTTP Code: $http_code"
+          
+          if [ "$http_code" != "200" ]; then
+            echo "Error: Function returned HTTP $http_code"
+            exit 1
+          fi
+
+  update-daily-prices:
+    runs-on: ubuntu-latest
+    # Only run on the daily schedule
+    if: github.event.schedule == '5 0 * * *' || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - name: Update daily crypto prices
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            '${{ secrets.SUPABASE_URL }}/functions/v1/update-daily-prices' \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            -H "Content-Type: application/json")
+          
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | head -n-1)
+          
+          echo "Response: $body"
+          echo "HTTP Code: $http_code"
+          
+          if [ "$http_code" != "200" ]; then
+            echo "Error: Function returned HTTP $http_code"
+            exit 1
+          fi
