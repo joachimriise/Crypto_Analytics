@@ -44,7 +44,7 @@ fi
 # ============================================
 
 echo -e "${GREEN}[1/8] Updating system packages...${NC}"
-sudo apt-get update -qq
+apt-get update -qq
 
 # ============================================
 # Install Node.js
@@ -56,7 +56,7 @@ if command -v node &> /dev/null; then
 else
     echo -e "${GREEN}[2/8] Installing Node.js...${NC}"
     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-    sudo apt-get install -y nodejs
+    apt-get install -y nodejs
     echo -e "${GREEN}✓ Node.js installed: $(node --version)${NC}"
 fi
 
@@ -68,7 +68,7 @@ if command -v git &> /dev/null; then
     echo -e "${GREEN}[3/8] Git is already installed: $(git --version)${NC}"
 else
     echo -e "${GREEN}[3/8] Installing Git...${NC}"
-    sudo apt-get install -y git
+    apt-get install -y git
     echo -e "${GREEN}✓ Git installed${NC}"
 fi
 
@@ -80,7 +80,7 @@ if command -v pm2 &> /dev/null; then
     echo -e "${GREEN}[4/8] PM2 is already installed: $(pm2 --version)${NC}"
 else
     echo -e "${GREEN}[4/8] Installing PM2...${NC}"
-    sudo npm install -g pm2
+    npm install -g pm2
     echo -e "${GREEN}✓ PM2 installed${NC}"
 fi
 
@@ -92,7 +92,7 @@ if command -v serve &> /dev/null; then
     echo -e "${GREEN}[5/8] serve is already installed${NC}"
 else
     echo -e "${GREEN}[5/8] Installing serve...${NC}"
-    sudo npm install -g serve
+    npm install -g serve
     echo -e "${GREEN}✓ serve installed${NC}"
 fi
 
@@ -104,8 +104,8 @@ echo -e "${GREEN}[6/8] Setting up deployment directory...${NC}"
 
 if [ ! -d "$DEPLOY_DIR" ]; then
     echo "Creating deployment directory: $DEPLOY_DIR"
-    sudo mkdir -p "$DEPLOY_DIR"
-    sudo chown -R $USER:$USER "$DEPLOY_DIR"
+    mkdir -p "$DEPLOY_DIR"
+    chown -R $USER:$USER "$DEPLOY_DIR"
     echo -e "${GREEN}✓ Deployment directory created${NC}"
 else
     echo -e "${YELLOW}Deployment directory already exists${NC}"
@@ -182,14 +182,14 @@ read -r INSTALL_NGINX
 
 if [[ "$INSTALL_NGINX" =~ ^[Yy]$ ]]; then
     echo -e "${GREEN}Installing Nginx...${NC}"
-    sudo apt-get install -y nginx
+    apt-get install -y nginx
     
     echo -e "${YELLOW}Enter your domain name (or press Enter to skip):${NC}"
     read -r DOMAIN_NAME
     
     if [ -n "$DOMAIN_NAME" ]; then
         # Create Nginx configuration
-        sudo tee /etc/nginx/sites-available/crypto-analytics > /dev/null <<EOF
+         tee /etc/nginx/sites-available/crypto-analytics > /dev/null <<EOF
 server {
     listen 80;
     server_name $DOMAIN_NAME;
@@ -209,13 +209,13 @@ server {
 EOF
         
         # Enable the site
-        sudo ln -sf /etc/nginx/sites-available/crypto-analytics /etc/nginx/sites-enabled/
+        ln -sf /etc/nginx/sites-available/crypto-analytics /etc/nginx/sites-enabled/
         
         # Test Nginx configuration
-        sudo nginx -t
+        nginx -t
         
         # Restart Nginx
-        sudo systemctl restart nginx
+        systemctl restart nginx
         
         echo -e "${GREEN}✓ Nginx configured for $DOMAIN_NAME${NC}"
         
@@ -224,8 +224,8 @@ EOF
         
         if [[ "$INSTALL_SSL" =~ ^[Yy]$ ]]; then
             echo -e "${GREEN}Installing Certbot...${NC}"
-            sudo apt-get install -y certbot python3-certbot-nginx
-            sudo certbot --nginx -d "$DOMAIN_NAME"
+            apt-get install -y certbot python3-certbot-nginx
+            certbot --nginx -d "$DOMAIN_NAME"
             echo -e "${GREEN}✓ SSL certificate installed${NC}"
         fi
     fi
@@ -241,12 +241,12 @@ read -r SETUP_WEBHOOK
 
 if [[ "$SETUP_WEBHOOK" =~ ^[Yy]$ ]]; then
     echo -e "${GREEN}Installing webhook...${NC}"
-    sudo apt-get install -y webhook
+    apt-get install -y webhook
     
     # Copy deployment script
-    sudo mkdir -p /var/scripts
-    sudo cp "$DEPLOY_DIR/scripts/deploy.sh" /var/scripts/deploy-crypto-analytics.sh
-    sudo chmod +x /var/scripts/deploy-crypto-analytics.sh
+     mkdir -p /var/scripts
+     cp "$DEPLOY_DIR/scripts/deploy.sh" /var/scripts/deploy-crypto-analytics.sh
+     chmod +x /var/scripts/deploy-crypto-analytics.sh
     
     echo -e "${YELLOW}Enter a webhook secret (or press Enter for random):${NC}"
     read -r WEBHOOK_SECRET
@@ -257,7 +257,7 @@ if [[ "$SETUP_WEBHOOK" =~ ^[Yy]$ ]]; then
     fi
     
     # Create webhook configuration
-    sudo tee /var/scripts/hooks.json > /dev/null <<EOF
+     tee /var/scripts/hooks.json > /dev/null <<EOF
 [
   {
     "id": "deploy-crypto-analytics",
@@ -292,7 +292,7 @@ if [[ "$SETUP_WEBHOOK" =~ ^[Yy]$ ]]; then
 EOF
     
     # Create systemd service
-    sudo tee /etc/systemd/system/webhook.service > /dev/null <<EOF
+     tee /etc/systemd/system/webhook.service > /dev/null <<EOF
 [Unit]
 Description=Webhook Service
 After=network.target
@@ -307,9 +307,9 @@ Restart=on-failure
 WantedBy=multi-user.target
 EOF
     
-    sudo systemctl daemon-reload
-    sudo systemctl enable webhook
-    sudo systemctl start webhook
+     systemctl daemon-reload
+     systemctl enable webhook
+     systemctl start webhook
     
     echo -e "${GREEN}✓ Webhook listener configured${NC}"
     echo -e "${YELLOW}Add this webhook to GitHub:${NC}"
