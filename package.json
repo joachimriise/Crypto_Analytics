@@ -1,7 +1,7 @@
 {
-  "name": "crypto-analytics-api",
+  "name": "crypto-analytics",
   "version": "1.0.0",
-  "description": "Backend API for Crypto Analytics",
+  "description": "AI-powered crypto analytics engine with macro event correlation",
   "main": "server/index.js",
   "type": "module",
   "scripts": {
@@ -10,6 +10,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
+    "collect:historical": "node scripts/collect-historical-data.js",
     "setup": "node scripts/setup-livecoinwatch.js",
     "setup:slow": "node scripts/setup.js",
     "server": "node server/index.js",
