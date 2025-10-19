@@ -1,12 +1,18 @@
-name: Deploy to Server
+name: Build and Test
+
+# This workflow builds and tests the application on every push to main.
+# For actual deployment, we're using Vercel which auto-deploys from GitHub.
+# If you want to deploy to a custom server, configure the SSH secrets first.
 
 on:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     
     steps:
@@ -28,35 +34,38 @@ jobs:
         VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
         VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
     
-    - name: Deploy to Server via SSH
-      uses: appleboy/ssh-action@v1.0.3
-      with:
-        host: ${{ secrets.SERVER_HOST }}
-        username: ${{ secrets.SERVER_USER }}
-        key: ${{ secrets.SERVER_SSH_KEY }}
-        port: ${{ secrets.SERVER_PORT }}
-        script: |
-          echo "🚀 Starting deployment..."
-          
-          # Navigate to project directory
-          cd ${{ secrets.DEPLOY_PATH }}
-          
-          # Pull latest changes
-          echo "📥 Pulling latest code from GitHub..."
-          git pull origin main
-          
-          # Install dependencies
-          echo "📦 Installing dependencies..."
-          npm ci
-          
-          # Build the application
-          echo "🔨 Building application..."
-          npm run build
-          
-          # Copy built files to web root
-          echo "📋 Copying files to web root..."
-          rm -rf ~/www/*
-          cp -r dist/* ~/www/
-          
-          echo "✅ Deployment complete!"
-          echo "🌐 Site updated at https://crypto.brandbuilder.no"
+    - name: Test build output exists
+      run: |
+        if [ -d "dist" ]; then
+          echo "✅ Build successful - dist directory created"
+          ls -la dist/
+        else
+          echo "❌ Build failed - dist directory not found"
+          exit 1
+        fi
+
+# NOTE: Actual deployment happens automatically via Vercel
+# Vercel watches this GitHub repo and deploys on every push to main.
+# 
+# If you want to deploy to a custom server instead, uncomment and configure:
+#
+#  deploy:
+#    needs: build
+#    runs-on: ubuntu-latest
+#    if: github.ref == 'refs/heads/main'
+#    
+#    steps:
+#    - name: Deploy to Server via SSH
+#      uses: appleboy/ssh-action@v1.0.3
+#      with:
+#        host: ${{ secrets.SERVER_HOST }}
+#        username: ${{ secrets.SERVER_USER }}
+#        key: ${{ secrets.SERVER_SSH_KEY }}
+#        port: ${{ secrets.SERVER_PORT }}
+#        script: |
+#          cd ${{ secrets.DEPLOY_PATH }}
+#          git pull origin main
+#          npm ci
+#          npm run build
+#          rm -rf ~/www/*
+#          cp -r dist/* ~/www/
