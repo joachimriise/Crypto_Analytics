@@ -9,20 +9,21 @@ on:
   workflow_dispatch: # Allow manual triggering
     inputs:
       function_name:
-        description: 'Which function to trigger (fetch-5min-prices, update-daily-prices, or both)'
+        description: 'Which function to trigger'
         required: false
         default: 'fetch-5min-prices'
         type: choice
         options:
           - fetch-5min-prices
           - update-daily-prices
-          - both
+          - fetch-historical-prices
+          - all
 
 jobs:
   update-5min-prices:
     runs-on: ubuntu-latest
-    # Run on 5-minute schedule OR manual trigger for 5-min OR both
-    if: github.event.schedule == '*/5 * * * *' || github.event.inputs.function_name == 'fetch-5min-prices' || github.event.inputs.function_name == 'both'
+    # Run on 5-minute schedule OR manual trigger for 5-min OR all
+    if: github.event.schedule == '*/5 * * * *' || github.event.inputs.function_name == 'fetch-5min-prices' || github.event.inputs.function_name == 'all'
     
     steps:
       - name: Update 5-minute crypto prices
@@ -55,8 +56,8 @@ jobs:
 
   update-daily-prices:
     runs-on: ubuntu-latest
-    # Run on daily schedule OR manual trigger for daily OR both
-    if: github.event.schedule == '5 0 * * *' || github.event.inputs.function_name == 'update-daily-prices' || github.event.inputs.function_name == 'both'
+    # Run on daily schedule OR manual trigger for daily OR all
+    if: github.event.schedule == '5 0 * * *' || github.event.inputs.function_name == 'update-daily-prices' || github.event.inputs.function_name == 'all'
     
     steps:
       - name: Update daily crypto prices
@@ -82,6 +83,42 @@ jobs:
             echo "✅ Successfully updated daily prices"
           else
             echo "❌ Failed to update daily prices"
+            echo "Status code: $http_code"
+            echo "Response body: $body"
+            exit 1
+          fi
+
+  fetch-historical-prices:
+    runs-on: ubuntu-latest
+    # Only run when manually triggered with historical option
+    if: github.event.inputs.function_name == 'fetch-historical-prices' || github.event.inputs.function_name == 'all'
+    
+    steps:
+      - name: Fetch historical crypto prices (since 2020-01-01)
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        run: |
+          echo "📅 Fetching historical crypto prices since 2020-01-01..."
+          echo "URL: ${SUPABASE_URL}/functions/v1/fetch-historical-prices"
+          echo "⚠️ This may take 10-15 minutes to complete..."
+          
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "${SUPABASE_URL}/functions/v1/fetch-historical-prices" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H "Content-Type: application/json" \
+            --max-time 900)
+          
+          http_code=$(echo "$response" | tail -n1)
+          body=$(echo "$response" | sed '$d')
+          
+          echo "HTTP Status: $http_code"
+          echo "Response: $body"
+          
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "✅ Successfully fetched historical prices"
+          else
+            echo "❌ Failed to fetch historical prices"
             echo "Status code: $http_code"
             echo "Response body: $body"
             exit 1
