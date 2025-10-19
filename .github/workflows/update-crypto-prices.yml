@@ -7,52 +7,82 @@ on:
     # Run daily at 00:05 UTC for daily price updates
     - cron: '5 0 * * *'
   workflow_dispatch: # Allow manual triggering
+    inputs:
+      function_name:
+        description: 'Which function to trigger (fetch-5min-prices, update-daily-prices, or both)'
+        required: false
+        default: 'fetch-5min-prices'
+        type: choice
+        options:
+          - fetch-5min-prices
+          - update-daily-prices
+          - both
 
 jobs:
   update-5min-prices:
     runs-on: ubuntu-latest
-    # Skip daily job runs for 5-minute updates
-    if: github.event.schedule != '5 0 * * *'
+    # Run on 5-minute schedule OR manual trigger for 5-min OR both
+    if: github.event.schedule == '*/5 * * * *' || github.event.inputs.function_name == 'fetch-5min-prices' || github.event.inputs.function_name == 'both'
     
     steps:
       - name: Update 5-minute crypto prices
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
+          echo "🔄 Fetching 5-minute crypto prices..."
+          echo "URL: ${SUPABASE_URL}/functions/v1/fetch-5min-prices"
+          
           response=$(curl -s -w "\n%{http_code}" -X POST \
-            '${{ secrets.SUPABASE_URL }}/functions/v1/fetch-5min-prices' \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            "${SUPABASE_URL}/functions/v1/fetch-5min-prices" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
             -H "Content-Type: application/json")
           
           http_code=$(echo "$response" | tail -n1)
-          body=$(echo "$response" | head -n-1)
+          body=$(echo "$response" | sed '$d')
           
+          echo "HTTP Status: $http_code"
           echo "Response: $body"
-          echo "HTTP Code: $http_code"
           
-          if [ "$http_code" != "200" ]; then
-            echo "Error: Function returned HTTP $http_code"
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "✅ Successfully updated 5-minute prices"
+          else
+            echo "❌ Failed to update 5-minute prices"
+            echo "Status code: $http_code"
+            echo "Response body: $body"
             exit 1
           fi
 
   update-daily-prices:
     runs-on: ubuntu-latest
-    # Only run on the daily schedule
-    if: github.event.schedule == '5 0 * * *' || github.event_name == 'workflow_dispatch'
+    # Run on daily schedule OR manual trigger for daily OR both
+    if: github.event.schedule == '5 0 * * *' || github.event.inputs.function_name == 'update-daily-prices' || github.event.inputs.function_name == 'both'
     
     steps:
       - name: Update daily crypto prices
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
         run: |
+          echo "🔄 Updating daily OHLC prices..."
+          echo "URL: ${SUPABASE_URL}/functions/v1/update-daily-prices"
+          
           response=$(curl -s -w "\n%{http_code}" -X POST \
-            '${{ secrets.SUPABASE_URL }}/functions/v1/update-daily-prices' \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            "${SUPABASE_URL}/functions/v1/update-daily-prices" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
             -H "Content-Type: application/json")
           
           http_code=$(echo "$response" | tail -n1)
-          body=$(echo "$response" | head -n-1)
+          body=$(echo "$response" | sed '$d')
           
+          echo "HTTP Status: $http_code"
           echo "Response: $body"
-          echo "HTTP Code: $http_code"
           
-          if [ "$http_code" != "200" ]; then
-            echo "Error: Function returned HTTP $http_code"
+          if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "✅ Successfully updated daily prices"
+          else
+            echo "❌ Failed to update daily prices"
+            echo "Status code: $http_code"
+            echo "Response body: $body"
             exit 1
           fi
