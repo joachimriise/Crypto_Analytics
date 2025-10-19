@@ -14,6 +14,30 @@ interface HistoricalDataPoint {
   cap: number;
 }
 
+interface DailyOHLC {
+  [date: string]: {
+    open: number;
+    high: number;
+    low: number;
+    close: number;
+    volume: number;
+    market_cap: number;
+  };
+}
+
+/**
+ * Smart Historical Data Fetcher
+ * 
+ * This function adapts to whatever granularity LiveCoinWatch API returns:
+ * - Detects interval (5-min, hourly, or daily)
+ * - Populates crypto_daily_prices with daily OHLC candles
+ * - Populates crypto_5min_prices with:
+ *   * Hourly data for historical period (2020 to ~30 days ago)
+ *   * 5-minute data for recent period (last 30 days)
+ * 
+ * API Usage: 1 call per cryptocurrency (very efficient!)
+ */
+
 Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -44,11 +68,16 @@ Deno.serve(async (req: Request) => {
     const results = [];
     const startDate = new Date("2020-01-01").getTime();
     const endDate = Date.now();
+    const recentThreshold = Date.now() - (30 * 24 * 60 * 60 * 1000); // 30 days ago
+
+    console.log(`Starting historical data fetch for ${cryptos.length} cryptocurrencies...`);
+    console.log(`Date range: 2020-01-01 to ${new Date().toISOString().split('T')[0]}`);
 
     for (const crypto of cryptos) {
-      console.log(`Fetching historical data for ${crypto.symbol}...`);
+      console.log(`\n📊 Fetching historical data for ${crypto.symbol}...`);
 
       try {
+        // ONE API CALL gets ALL history for this crypto
         const response = await fetch("https://api.livecoinwatch.com/coins/single/history", {
           method: "POST",
           headers: {
@@ -65,64 +94,156 @@ Deno.serve(async (req: Request) => {
         });
 
         if (!response.ok) {
-          console.error(`Failed to fetch ${crypto.symbol}: ${response.status}`);
+          console.error(`❌ Failed to fetch ${crypto.symbol}: HTTP ${response.status}`);
           continue;
         }
 
         const data = await response.json();
         const history: HistoricalDataPoint[] = data.history || [];
 
-        const dailyPrices = [];
-        for (let i = 0; i < history.length; i++) {
-          const current = history[i];
-          const date = new Date(current.date);
-
-          const dayData = {
-            symbol: crypto.symbol,
-            coin_id: crypto.coin_id,
-            date: date.toISOString().split("T")[0],
-            open: current.rate,
-            high: current.rate,
-            low: current.rate,
-            close: current.rate,
-            volume: current.volume || 0,
-            market_cap: current.cap || 0,
-          };
-
-          dailyPrices.push(dayData);
+        if (history.length === 0) {
+          console.log(`⚠️  No history data returned for ${crypto.symbol}`);
+          continue;
         }
 
-        const batchSize = 500;
-        for (let i = 0; i < dailyPrices.length; i += batchSize) {
-          const batch = dailyPrices.slice(i, i + batchSize);
-          const { error: insertError } = await supabaseClient
-            .from("crypto_daily_prices")
-            .upsert(batch, {
-              onConflict: "symbol,date",
-              ignoreDuplicates: false,
-            });
+        // Detect the interval between data points
+        const intervalMs = history.length > 1 ? history[1].date - history[0].date : 0;
+        const intervalMinutes = intervalMs / 1000 / 60;
+        
+        console.log(`   Total data points: ${history.length}`);
+        console.log(`   Detected interval: ~${Math.round(intervalMinutes)} minutes`);
+        console.log(`   First point: ${new Date(history[0].date).toISOString()}`);
+        console.log(`   Last point: ${new Date(history[history.length - 1].date).toISOString()}`);
 
-          if (insertError) {
-            console.error(`Error inserting batch for ${crypto.symbol}:`, insertError);
+        // Process based on detected granularity
+        let intradayData = [];
+        let dailyData = [];
+
+        if (intervalMinutes <= 10) {
+          // 5-minute or finer data detected
+          console.log(`   Processing as 5-minute data...`);
+          
+          // Split into historical (hourly) and recent (5-min)
+          const historicalPoints = [];
+          const recentPoints = [];
+          
+          for (let i = 0; i < history.length; i++) {
+            const point = history[i];
+            
+            if (point.date < recentThreshold) {
+              // Historical: Keep only hourly (every ~12th point)
+              if (i % 12 === 0) {
+                historicalPoints.push(point);
+              }
+            } else {
+              // Recent: Keep all 5-minute data
+              recentPoints.push(point);
+            }
           }
+
+          intradayData = [...historicalPoints, ...recentPoints].map(h => ({
+            symbol: crypto.symbol,
+            coin_id: crypto.coin_id,
+            timestamp: new Date(h.date).toISOString(),
+            price: h.rate,
+            volume: h.volume || 0,
+            market_cap: h.cap || 0,
+          }));
+
+          console.log(`   Historical hourly points: ${historicalPoints.length}`);
+          console.log(`   Recent 5-min points: ${recentPoints.length}`);
+
+          // Create daily OHLC from 5-min data
+          dailyData = createDailyOHLC(history, crypto);
+
+        } else if (intervalMinutes <= 90) {
+          // Hourly data - perfect!
+          console.log(`   Processing as hourly data (perfect for our use case!)`);
+          
+          intradayData = history.map(h => ({
+            symbol: crypto.symbol,
+            coin_id: crypto.coin_id,
+            timestamp: new Date(h.date).toISOString(),
+            price: h.rate,
+            volume: h.volume || 0,
+            market_cap: h.cap || 0,
+          }));
+
+          // Create daily OHLC from hourly data
+          dailyData = createDailyOHLC(history, crypto);
+
+        } else {
+          // Daily data
+          console.log(`   Processing as daily data...`);
+          
+          dailyData = history.map(h => ({
+            symbol: crypto.symbol,
+            coin_id: crypto.coin_id,
+            date: new Date(h.date).toISOString().split("T")[0],
+            open: h.rate,
+            high: h.rate,
+            low: h.rate,
+            close: h.rate,
+            volume: h.volume || 0,
+            market_cap: h.cap || 0,
+          }));
+
+          // For daily data, also store as intraday (one point per day)
+          intradayData = history.map(h => ({
+            symbol: crypto.symbol,
+            coin_id: crypto.coin_id,
+            timestamp: new Date(h.date).toISOString(),
+            price: h.rate,
+            volume: h.volume || 0,
+            market_cap: h.cap || 0,
+          }));
+        }
+
+        // Insert intraday data in batches
+        if (intradayData.length > 0) {
+          console.log(`   💾 Inserting ${intradayData.length} intraday records...`);
+          await insertBatches(
+            supabaseClient,
+            "crypto_5min_prices",
+            intradayData,
+            "symbol,timestamp"
+          );
+        }
+
+        // Insert daily data in batches
+        if (dailyData.length > 0) {
+          console.log(`   💾 Inserting ${dailyData.length} daily records...`);
+          await insertBatches(
+            supabaseClient,
+            "crypto_daily_prices",
+            dailyData,
+            "symbol,date"
+          );
         }
 
         results.push({
           symbol: crypto.symbol,
-          recordsProcessed: dailyPrices.length,
+          interval: `${Math.round(intervalMinutes)} minutes`,
+          totalPoints: history.length,
+          intradayRecords: intradayData.length,
+          dailyRecords: dailyData.length,
           status: "success",
         });
 
+        // Log API usage
         await supabaseClient.from("api_usage_logs").insert({
           api_name: "LiveCoinWatch",
           endpoint: "/coins/single/history",
           success: true,
         });
 
+        console.log(`   ✅ ${crypto.symbol} completed successfully`);
+
+        // Rate limiting: 1 second between requests
         await new Promise(resolve => setTimeout(resolve, 1000));
 
       } catch (error) {
-        console.error(`Error processing ${crypto.symbol}:`, error);
+        console.error(`❌ Error processing ${crypto.symbol}:`, error);
         results.push({
           symbol: crypto.symbol,
           status: "error",
@@ -138,10 +259,19 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    console.log(`\n✅ Historical data fetch completed!`);
+    console.log(`   Successful: ${results.filter(r => r.status === 'success').length}`);
+    console.log(`   Failed: ${results.filter(r => r.status === 'error').length}`);
+
     return new Response(
       JSON.stringify({
         success: true,
         message: "Historical data fetched successfully",
+        summary: {
+          total: results.length,
+          successful: results.filter(r => r.status === 'success').length,
+          failed: results.filter(r => r.status === 'error').length,
+        },
         results,
       }),
       {
@@ -151,7 +281,7 @@ Deno.serve(async (req: Request) => {
     );
 
   } catch (error) {
-    console.error("Error:", error);
+    console.error("💥 Fatal error:", error);
     return new Response(
       JSON.stringify({
         success: false,
@@ -164,3 +294,66 @@ Deno.serve(async (req: Request) => {
     );
   }
 });
+
+/**
+ * Insert data in batches to avoid overwhelming the database
+ */
+async function insertBatches(
+  client: any,
+  table: string,
+  data: any[],
+  conflictColumns: string,
+  batchSize = 500
+) {
+  for (let i = 0; i < data.length; i += batchSize) {
+    const batch = data.slice(i, i + batchSize);
+    const { error } = await client
+      .from(table)
+      .upsert(batch, {
+        onConflict: conflictColumns,
+        ignoreDuplicates: false,
+      });
+
+    if (error) {
+      console.error(`   ⚠️  Error inserting batch ${i / batchSize + 1}:`, error.message);
+    }
+  }
+}
+
+/**
+ * Create daily OHLC candles from intraday data
+ */
+function createDailyOHLC(history: HistoricalDataPoint[], crypto: any) {
+  const days: DailyOHLC = {};
+
+  // Group by day and calculate OHLC
+  for (const point of history) {
+    const date = new Date(point.date).toISOString().split("T")[0];
+
+    if (!days[date]) {
+      days[date] = {
+        open: point.rate,
+        high: point.rate,
+        low: point.rate,
+        close: point.rate,
+        volume: point.volume || 0,
+        market_cap: point.cap || 0,
+      };
+    } else {
+      // Update high/low
+      days[date].high = Math.max(days[date].high, point.rate);
+      days[date].low = Math.min(days[date].low, point.rate);
+      days[date].close = point.rate; // Last price of the day
+      days[date].volume += point.volume || 0;
+      days[date].market_cap = point.cap || 0; // Use latest market cap
+    }
+  }
+
+  // Convert to array format
+  return Object.entries(days).map(([date, ohlc]) => ({
+    symbol: crypto.symbol,
+    coin_id: crypto.coin_id,
+    date: date,
+    ...ohlc,
+  }));
+}
