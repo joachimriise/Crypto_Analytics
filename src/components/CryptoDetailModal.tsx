@@ -39,6 +39,7 @@ export function CryptoDetailModal({ symbol, name, currentPrice, onClose }: Crypt
   const [data, setData] = useState<Record<string, TimeframeData>>({});
   const [indicators, setIndicators] = useState<TechnicalIndicators | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadAllData();
@@ -46,11 +47,18 @@ export function CryptoDetailModal({ symbol, name, currentPrice, onClose }: Crypt
 
   async function loadAllData() {
     setLoading(true);
-    await Promise.all([
-      loadAllTimeframes(),
-      loadTechnicalIndicators()
-    ]);
-    setLoading(false);
+    setError(null);
+    try {
+      await Promise.all([
+        loadAllTimeframes(),
+        loadTechnicalIndicators()
+      ]);
+    } catch (err) {
+      console.error('Error loading data:', err);
+      setError('Failed to load price data');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function loadAllTimeframes() {
@@ -67,9 +75,13 @@ export function CryptoDetailModal({ symbol, name, currentPrice, onClose }: Crypt
     const results: Record<string, TimeframeData> = {};
 
     for (const [key, config] of Object.entries(timeframes)) {
-      const timeframeData = await loadTimeframeData(config);
-      if (timeframeData) {
-        results[key] = timeframeData;
+      try {
+        const timeframeData = await loadTimeframeData(config);
+        if (timeframeData) {
+          results[key] = timeframeData;
+        }
+      } catch (err) {
+        console.error(`Error loading timeframe ${key}:`, err);
       }
     }
 
@@ -111,13 +123,18 @@ export function CryptoDetailModal({ symbol, name, currentPrice, onClose }: Crypt
         .gte('date', startDate.toISOString().split('T')[0])
         .order('date', { ascending: true });
 
-      if (error || !dailyData || dailyData.length === 0) {
+      if (error) {
+        console.error('Error fetching daily data:', error);
+        return null;
+      }
+      
+      if (!dailyData || dailyData.length === 0) {
         return null;
       }
 
       const prices = dailyData.map(p => ({
         timestamp: p.date,
-        price: Number(p.close),
+        price: Number(p.price),
       }));
 
       return calculateMetrics(prices);
@@ -125,7 +142,12 @@ export function CryptoDetailModal({ symbol, name, currentPrice, onClose }: Crypt
 
     const { data: prices, error } = await query;
 
-    if (error || !prices || prices.length === 0) {
+    if (error) {
+      console.error('Error fetching price data:', error);
+      return null;
+    }
+
+    if (!prices || prices.length === 0) {
       return null;
     }
 
@@ -161,47 +183,58 @@ export function CryptoDetailModal({ symbol, name, currentPrice, onClose }: Crypt
   }
 
   async function loadTechnicalIndicators() {
-    // Fetch last 200 data points for technical analysis
-    const { data: recentPrices } = await supabase
-      .from('crypto_5min_prices')
-      .select('price')
-      .eq('symbol', symbol)
-      .order('timestamp', { ascending: false })
-      .limit(200);
+    try {
+      // Fetch last 200 data points for technical analysis
+      const { data: recentPrices, error } = await supabase
+        .from('crypto_5min_prices')
+        .select('price')
+        .eq('symbol', symbol)
+        .order('timestamp', { ascending: false })
+        .limit(200);
 
-    if (!recentPrices || recentPrices.length < 14) {
+      if (error) {
+        console.error('Error fetching technical indicators:', error);
+        setIndicators(null);
+        return;
+      }
+
+      if (!recentPrices || recentPrices.length < 14) {
+        setIndicators(null);
+        return;
+      }
+
+      const prices = recentPrices.map(p => Number(p.price)).reverse();
+
+      // Calculate RSI (14-period)
+      const rsi = calculateRSI(prices, 14);
+
+      // Calculate SMAs
+      const sma20 = prices.length >= 20 ? calculateSMA(prices, 20) : null;
+      const sma50 = prices.length >= 50 ? calculateSMA(prices, 50) : null;
+      const sma200 = prices.length >= 200 ? calculateSMA(prices, 200) : null;
+
+      // Calculate momentum (10-period rate of change)
+      const momentum = prices.length >= 10
+        ? ((prices[prices.length - 1] - prices[prices.length - 10]) / prices[prices.length - 10]) * 100
+        : null;
+
+      // Price vs SMA analysis
+      const priceVsSma20 = sma20 ? ((currentPrice - sma20) / sma20) * 100 : null;
+      const priceVsSma50 = sma50 ? ((currentPrice - sma50) / sma50) * 100 : null;
+
+      setIndicators({
+        rsi,
+        sma20,
+        sma50,
+        sma200,
+        momentum,
+        priceVsSma20,
+        priceVsSma50,
+      });
+    } catch (err) {
+      console.error('Error loading technical indicators:', err);
       setIndicators(null);
-      return;
     }
-
-    const prices = recentPrices.map(p => Number(p.price)).reverse();
-
-    // Calculate RSI (14-period)
-    const rsi = calculateRSI(prices, 14);
-
-    // Calculate SMAs
-    const sma20 = prices.length >= 20 ? calculateSMA(prices, 20) : null;
-    const sma50 = prices.length >= 50 ? calculateSMA(prices, 50) : null;
-    const sma200 = prices.length >= 200 ? calculateSMA(prices, 200) : null;
-
-    // Calculate momentum (10-period rate of change)
-    const momentum = prices.length >= 10
-      ? ((prices[prices.length - 1] - prices[prices.length - 10]) / prices[prices.length - 10]) * 100
-      : null;
-
-    // Price vs SMA analysis
-    const priceVsSma20 = sma20 ? ((currentPrice - sma20) / sma20) * 100 : null;
-    const priceVsSma50 = sma50 ? ((currentPrice - sma50) / sma50) * 100 : null;
-
-    setIndicators({
-      rsi,
-      sma20,
-      sma50,
-      sma200,
-      momentum,
-      priceVsSma20,
-      priceVsSma50,
-    });
   }
 
   function calculateRSI(prices: number[], period: number = 14): number | null {
@@ -252,7 +285,7 @@ export function CryptoDetailModal({ symbol, name, currentPrice, onClose }: Crypt
   }
 
   function getTrendSignal(priceVsSma: number | null): { text: string; color: string } {
-    if (!priceVsSma) return { text: 'N/A', color: 'text-slate-500' };
+    if (priceVsSma === null || priceVsSma === undefined) return { text: 'N/A', color: 'text-slate-500' };
     if (priceVsSma > 2) return { text: 'Strong Uptrend', color: 'text-emerald-400' };
     if (priceVsSma > 0) return { text: 'Uptrend', color: 'text-emerald-300' };
     if (priceVsSma > -2) return { text: 'Downtrend', color: 'text-red-300' };
@@ -345,6 +378,12 @@ export function CryptoDetailModal({ symbol, name, currentPrice, onClose }: Crypt
               </button>
             ))}
           </div>
+
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/50 rounded-lg p-4 mb-6">
+              <p className="text-red-400 text-sm">{error}</p>
+            </div>
+          )}
 
           {loading ? (
             <div className="text-center py-20">
@@ -455,7 +494,7 @@ export function CryptoDetailModal({ symbol, name, currentPrice, onClose }: Crypt
                       <div className="bg-slate-800/50 rounded p-3">
                         <p className="text-xs text-slate-400 mb-2">Moving Averages</p>
                         <div className="space-y-1.5 text-xs">
-                          {indicators.sma20 && (
+                          {indicators.sma20 !== null && (
                             <div className="flex justify-between items-center">
                               <span className="text-slate-400">SMA 20:</span>
                               <span className="text-white font-medium">
@@ -463,7 +502,7 @@ export function CryptoDetailModal({ symbol, name, currentPrice, onClose }: Crypt
                               </span>
                             </div>
                           )}
-                          {indicators.sma50 && (
+                          {indicators.sma50 !== null && (
                             <div className="flex justify-between items-center">
                               <span className="text-slate-400">SMA 50:</span>
                               <span className="text-white font-medium">
@@ -471,7 +510,7 @@ export function CryptoDetailModal({ symbol, name, currentPrice, onClose }: Crypt
                               </span>
                             </div>
                           )}
-                          {indicators.sma200 && (
+                          {indicators.sma200 !== null && (
                             <div className="flex justify-between items-center">
                               <span className="text-slate-400">SMA 200:</span>
                               <span className="text-white font-medium">
@@ -527,7 +566,7 @@ export function CryptoDetailModal({ symbol, name, currentPrice, onClose }: Crypt
                 <div className="bg-slate-700/50 rounded-lg p-4">
                   <h3 className="text-sm font-bold text-white mb-3">Quick Analysis</h3>
                   <div className="space-y-2 text-xs">
-                    {indicators?.rsi && (
+                    {indicators?.rsi !== null && typeof indicators?.rsi === 'number' && (
                       <div className="flex items-start gap-2">
                         <div className={`w-2 h-2 rounded-full mt-1 ${
                           indicators.rsi >= 70 ? 'bg-red-400' :
@@ -553,7 +592,7 @@ export function CryptoDetailModal({ symbol, name, currentPrice, onClose }: Crypt
                         </p>
                       </div>
                     )}
-                    {indicators?.priceVsSma20 !== null && (
+                    {indicators?.priceVsSma20 !== null && typeof indicators?.priceVsSma20 === 'number' && (
                       <div className="flex items-start gap-2">
                         <div className={`w-2 h-2 rounded-full mt-1 ${
                           Math.abs(indicators.priceVsSma20) > 5 ? 'bg-purple-400' : 'bg-slate-400'
