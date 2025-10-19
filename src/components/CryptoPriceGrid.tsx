@@ -7,9 +7,7 @@ import { CryptoDetailModal } from './CryptoDetailModal';
 interface CryptoPrice {
   symbol: string;
   name: string;
-  price_usd: number;
-  high: number;
-  low: number;
+  price: number;
   volume: number;
   market_cap: number;
   timestamp: string;
@@ -23,20 +21,20 @@ export function CryptoPriceGrid() {
 
   useEffect(() => {
     loadPrices();
-    const interval = setInterval(loadPrices, 60000);
+    const interval = setInterval(loadPrices, 60000); // Update every minute
     return () => clearInterval(interval);
   }, []);
 
   async function loadPrices() {
     try {
       const symbols = TOP_CRYPTOS.map(c => c.symbol);
-      const twentyFourHoursAgo = new Date();
-      twentyFourHoursAgo.setHours(twentyFourHoursAgo.getHours() - 24);
+      const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
       const pricePromises = symbols.map(async symbol => {
+        // Get current price from crypto_5min_prices (latest record)
         const { data: current } = await supabase
-          .from('crypto_prices')
-          .select('*')
+          .from('crypto_5min_prices')
+          .select('symbol, price, volume, market_cap, timestamp')
           .eq('symbol', symbol)
           .order('timestamp', { ascending: false })
           .limit(1)
@@ -44,25 +42,34 @@ export function CryptoPriceGrid() {
 
         if (!current) return null;
 
+        // Get price from 24 hours ago for change calculation
         const { data: old } = await supabase
-          .from('crypto_prices')
-          .select('price_usd')
+          .from('crypto_5min_prices')
+          .select('price')
           .eq('symbol', symbol)
           .lte('timestamp', twentyFourHoursAgo.toISOString())
           .order('timestamp', { ascending: false })
           .limit(1)
           .maybeSingle();
 
-        const currentPrice = Number(current.price_usd);
+        const currentPrice = Number(current.price);
         let change24h = 0;
 
         if (old) {
-          const oldPrice = Number(old.price_usd);
+          const oldPrice = Number(old.price);
           change24h = ((currentPrice - oldPrice) / oldPrice) * 100;
         }
 
+        // Find the crypto name from TOP_CRYPTOS
+        const cryptoInfo = TOP_CRYPTOS.find(c => c.symbol === symbol);
+
         return {
-          ...current,
+          symbol: current.symbol,
+          name: cryptoInfo?.name || symbol,
+          price: currentPrice,
+          volume: Number(current.volume),
+          market_cap: Number(current.market_cap),
+          timestamp: current.timestamp,
           change24h,
         };
       });
@@ -72,14 +79,7 @@ export function CryptoPriceGrid() {
 
       results.forEach(price => {
         if (price) {
-          priceMap.set(price.symbol, {
-            ...price,
-            price_usd: Number(price.price_usd),
-            high: Number(price.high),
-            low: Number(price.low),
-            volume: Number(price.volume),
-            market_cap: Number(price.market_cap),
-          });
+          priceMap.set(price.symbol, price);
         }
       });
 
@@ -122,7 +122,7 @@ export function CryptoPriceGrid() {
                   className="bg-slate-800/50 border border-slate-700 rounded-lg p-4"
                 >
                   <p className="text-sm font-medium text-slate-400">{crypto.symbol}</p>
-                  <p className="text-xs text-slate-600">No data</p>
+                  <p className="text-xs text-slate-600">Loading...</p>
                 </div>
               );
             }
@@ -133,7 +133,7 @@ export function CryptoPriceGrid() {
             return (
               <button
                 key={crypto.symbol}
-                onClick={() => setSelectedCrypto({ symbol: crypto.symbol, name: crypto.name, price: price.price_usd })}
+                onClick={() => setSelectedCrypto({ symbol: crypto.symbol, name: crypto.name, price: price.price })}
                 className="bg-slate-800/50 border border-slate-700 rounded-lg p-4 hover:border-blue-500 hover:bg-slate-800 transition-all cursor-pointer text-left"
               >
                 <div className="flex items-center justify-between mb-1">
@@ -145,7 +145,7 @@ export function CryptoPriceGrid() {
                   )}
                 </div>
                 <p className="text-xl font-bold text-white mb-1">
-                  ${price.price_usd.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  ${price.price.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                 </p>
                 <p
                   className={`text-xs font-medium ${
